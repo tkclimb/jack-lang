@@ -1,0 +1,16 @@
+[package]
+authors = ["iohub <cn.ydlme@gmail.com>"]
+build = "build.rs"
+edition = "2018"
+name = "jack-lang"
+version = "0.1.0"
+
+[dependencies]
+clap = "~2.33"
+lalrpop-util = "0.16"
+lazy_static = "1.3.0"
+llvm-sys = "60.0.3"
+regex = "0.2.0"
+
+[build-dependencies]
+lalrpop = "0.16"

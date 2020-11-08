@@ -1,0 +1,292 @@
+
+use std::str::FromStr;
+use crate::ast::*;
+
+grammar;
+
+pub Module: StmtBlock = {
+    <v: Statement*> => v
+}
+
+pub Statement: Stmt = {
+    <fn_decl: FnDecl> => fn_decl,
+    // <struct_decl: StructDecl> => struct_decl,
+    // <expr: Expr> ";" => expr,
+    // <if_stmt: IfStmt> => if_stmt,
+    // <AssignStmt> ";" => <>,
+    // <WhileStmt> => <>,
+    // <LetStmt> => <>,
+    // <ReturnExpr> ";" => <>,
+}
+
+FnDecl: Stmt = {
+    <s:@L> <p:"pub"?> "fn" <name: RawId> <args: FnDeclArgs> "->" <r: RawId> <block: Stmtblock> <e:@L> => {
+        // let ty = Type::from(&r).expect("must be a type");
+        Stmt::FnDecl{
+            meta: Meta{start: s, end: e},
+            name: name,
+            args: args,
+            block: block
+        }
+    },
+    // <s:@L> <p:"pub"?> "fn" <name: RawId> <args: FnDeclArgs> <block: Stmtblock> <e:@L> => {
+    //     Stmt::FnDecl{
+    //         meta: Meta{start: s, end: e},
+    //         name: name,
+    //         args: args,
+    //         block: block
+    //     }
+    // }
+}
+
+Stmtblock: StmtBlock = {
+   "{" <v:(<Statement>)*> <e:(Statement)?> "}" => match e {
+        None => v,
+        Some(e) => {
+            let mut v = v;
+            v.push(e);
+            v
+        }
+    }
+}
+
+FnDeclArgs: Vec<VarDecl> = {
+    "(" <v:(<ColonArg> ",")*> <e:ColonArg?> ")" => match e {
+        None => v,
+        Some(e) => {
+            let mut v = v;
+            v.push(e);
+            v
+        }
+    }
+}
+
+ColonArg: VarDecl = {
+    <s:@L> <n: RawId> ":" <t: RawId> <e:@L> => {
+        let ty = Type::from(&t).expect("must be a type");
+        VarDecl{meta: Meta{start: s, end: e}, name: n, ty: ty}
+    }
+}
+
+// IfStmt: AstNode = {
+//     <s:@L> "if" <cond: Expr> <tblock: Stmtblock> <e:@L> => {
+//         AstNode::IfStmt(Box::new(cond), tblock, Vec::new())
+//     },
+//     <s:@L> "if" <cond: Expr> <tblock: Stmtblock> "else" <fblock: Stmtblock> <e:@L> => {
+//         AstNode::IfStmt(Box::new(cond), tblock, fblock)
+//     }
+// }
+
+// LetStmt: AstNode = {
+//     <s:@L> "let" <var: Id> ":" <vty: RawId> ";" <e:@L> => {
+//         let typ = typeof_ident(&vty);
+//         AstNode::VarDecl(Box::new(var), Box::new(AstNode::Nil), typ)
+//     },
+//     <s:@L> "let" <var: Id> "=" <val: Expr> ";" <e:@L> => {
+//         AstNode::VarDecl(Box::new(var), Box::new(val), AstType::Undef)
+//     }
+// }
+
+// WhileStmt: AstNode = {
+//     <s:@L> "while" <cond: Expr> <tblock: Stmtblock> <e:@L> => {
+//         AstNode::WhileStmt(Box::new(cond), tblock)
+//     },
+// }
+
+// AssignStmt: AstNode = {
+//     <s:@L> <var1: Id> "=" <var2: Expr> <e:@L> => {
+//         AstNode::Assignment(Box::new(var1), Box::new(var2))
+//     }
+// }
+
+OrOp: BinOpKind = {
+    "||" => BinOpKind::Or,
+}
+
+AndOp: BinOpKind = {
+    "&&" => BinOpKind::And,
+}
+
+EqOp: BinOpKind = {
+    "==" => BinOpKind::Eq,
+    "!=" => BinOpKind::Ne,
+}
+
+CmpOp: BinOpKind = {
+    "<=" => BinOpKind::Le,
+    ">=" => BinOpKind::Ge,
+    "<"  => BinOpKind::Lt,
+    ">"  => BinOpKind::Gt,
+}
+
+AddOp: BinOpKind = {
+    "+"  => BinOpKind::Plus,
+    "-"  => BinOpKind::Sub,
+}
+
+MulOp: BinOpKind = {
+    "*"  => BinOpKind::Mul,
+    "/"  => BinOpKind::Div,
+}
+
+
+Expr: Expr = {
+    Op1 => <>,
+}
+
+BinOp<Op, Current, Next>: Expr = {
+    <s:@L> <l:(<Current>)> <k:(<Op>)> <r:Next> <e:@L> => {
+        Expr::BinOp{
+           meta: Meta{start: s, end: e},
+           kind: k,
+           lhs: Box::new(l), 
+           rhs: Box::new(r)
+        }
+    }
+}
+
+Op1: Expr = {
+    <op:BinOp<OrOp, Op1, Op2>> => <>,
+    Op2 => <>,
+}
+
+Op2: Expr = {
+    <op:BinOp<AndOp, Op2, Op3>> => <>,
+    Op3 => <>,
+}
+
+Op3: Expr = {
+    <op:BinOp<EqOp, Op3, Op4>> => <>,
+    Op4 => <>,
+}
+
+Op4: Expr = {
+    <op:BinOp<CmpOp, Op4, Op5>> => <>,
+    Op5 => <>,
+}
+
+Op5: Expr = {
+    <op:BinOp<AddOp, Op5, Op6>> => <>,
+    Op6 => <>,
+}
+
+Op6: Expr = {
+    <op:BinOp<MulOp, Op6, SimpleExpr>> => <>,
+    SimpleExpr => <>,
+}
+
+SimpleExpr: Expr = {
+    Id => <>,
+    Literal => <>,
+    // Call => <>,
+}
+
+Literal: Expr = {
+    Float => <>,
+    Int => <>,
+    Str => <>,
+}
+
+// ReturnExpr: AstNode = {
+//     <s:@L> "return" <val: Expr> <e:@L> => {
+//         AstNode::ReturnStmt(Box::new(val), AstType::Undef)
+//     }
+// }
+
+// Call: AstNode = {
+//      <s:@L> <fn_name:Id> <args:FnArgs> <e:@L> => AstNode::Call(Box::new(fn_name), args)
+// }
+
+
+// FnArgs: Vec<AstNode> = {
+//     "(" <args:CommaList<Expr>> ")" => args
+// }
+
+// CommaList<T>: Vec<T> = {
+//     <v:(<T> ",")*> <e:T?> => match e {
+//         None => v,
+//         Some(e) => {
+//             let mut v = v;
+//             v.push(e);
+//             v
+//         }
+//     }
+// }
+
+// FnDecl: AstNode = {
+//     <s:@L> <p:"pub"?> "fn" <name: RawId> <args: FnDeclArgs> "->" <rtype: RawId> <block: Stmtblock> <e:@L> => {
+//         let typ = typeof_ident(&rtype);
+//         AstNode::FnDecl(Box::new(AstNode::Id(name, typ)), args, block)
+//     },
+//     <s:@L> <p:"pub"?> "fn" <name: RawId> <args: FnDeclArgs> <block: Stmtblock> <e:@L> => {
+//         AstNode::FnDecl(Box::new(AstNode::Id(name, AstType::Int)), args, block)
+//     }
+// }
+
+// StructDecl: AstNode = {
+//     <s:@L> <p: "pub"?> "struct" <ident: Id> <field: StructField> <e:@L> => {
+//         AstNode::StructDecl(Box::new(ident), field)
+//     }
+// }
+
+// StructField: Vec<AstNode> = {
+//     "{" <v:(<FieldDecl> ",")*> <e:FieldDecl?> "}" => match e {
+//         None => v,
+//         Some(e) => {
+//             let mut v = v;
+//             v.push(e);
+//             v
+//         }
+//     }
+// }
+
+// FieldDecl: AstNode = {
+//     <p: "pub"?> <n: RawId> ":" <t: RawId> => {
+//         let typ = typeof_ident(&t);
+//         AstNode::Id(n, typ)
+//     }
+// }
+
+
+RawId: String = {
+    <v:r"[A-Za-z_][A-Za-z_0-9]*"> => v.to_string()
+}
+
+
+
+Id: Expr = {
+    <s:@L> <v:r"[A-Za-z_][A-Za-z_0-9]*"> <e:@L> => {
+        Expr::Var{ meta: Meta{start: s, end: e}, name: v }
+    }
+}
+
+Int: Expr = {
+    <s:@L> <i:r"-?[0-9]+"> <e:@L> => { 
+        let num = i32::from_str(i).unwrap();
+        Expr::Num{
+            meta: Meta{start: s, end: e},
+            ty: NumTypeKind::I32,
+            value: Value::I32(num),
+        }
+    }
+}
+
+Float: Expr = {
+    <s:@L> <f:r"-?[0-9]+\.+[0-9]*"> <e:@L> => {
+        let num = f32::from_str(f).unwrap();
+        Expr::Num{
+            meta: Meta{start: s, end: e},
+            ty: NumTypeKind::F32,
+            value: Value::F32(num),
+        }
+    }
+}
+
+Str: Expr = {
+    <s:@L> <x:r#""(([^\\"]|\\.)*)""#> <e:@L> => {
+        Expr::Str{
+            meta: Meta{start: s, end: e},
+            value: x[1..(x.len() - 1)].to_string(),
+        }
+    }
+}
